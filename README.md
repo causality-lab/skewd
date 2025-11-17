@@ -40,7 +40,7 @@ Alternatively, we provide the ``requirements.txt'' file for environment creation
 ## Running SKEWD
 
 ### Reproduce Results
-For replicating the experiments, see the README.md inside the experiments folder. Another example for a single pair is provided in "src/example.py", showing how to execute SKEWD on a skew-noise pair.
+For replicating the experiments, see the README.md inside the experiments folder. 
 
 ### Random Dataset
 
@@ -61,4 +61,5 @@ print(f"SKEWD-IT infers direction {indep_dir}")
 print(f"SKEWD-LL infers direction {lik_dir}")
 ```
 The inferred direction is given by indep_dir and lik_dir for independence testing and likelihood scoring, respectively. 
-If the direction is 1 x -> y is inferred, while if it is 0 y-> x is inferred.
+If the direction is 1 x -> y is inferred, while if it is 0 y-> x is inferred. 
+Another example for a single pair is provided in "src/example.py", showing how to execute SKEWD on a skew-noise pair.
