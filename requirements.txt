@@ -1,0 +1,16 @@
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
+numpy==1.26.4
+matplotlib
+pandas
+scikit-learn
+scipy
+statsmodels
+gin-config
+ipykernel
+pillow==10.1.0
+tqdm
+cmaes
+scikit-optimize
+pytest
+torch

@@ -1,0 +1,21 @@
+name: skewd-env
+channels:
+  - conda-forge
+dependencies:
+  - python==3.11.5
+  - numpy==1.26.4
+  - matplotlib
+  - pandas
+  - scikit-learn
+  - scipy
+  - statsmodels
+  - gin-config
+  - ipykernel
+  - pillow==10.1.0
+  - tqdm
+  - cmaes
+  - scikit-optimize
+  - pytest
+  - pip
+  - pip:
+      - torch --index-url https://download.pytorch.org/whl/cpu
