@@ -16,6 +16,13 @@ dependencies:
   - cmaes
   - scikit-optimize
   - pytest
+  - cdt
+  - graphviz
+  - pathos
   - pip
+  - rpy2
   - pip:
+      - graphical_models
+      - python-igraph
+      - causal-learn
       - torch --index-url https://download.pytorch.org/whl/cpu

@@ -5,7 +5,8 @@ from src.snecm import SNECM
 from src.hsic import HSIC
 import numpy as np
 from src.snlik import m, sn_lik
-
+from sklearn.neighbors import KernelDensity
+from sklearn.model_selection import GridSearchCV, KFold
 
 def fithetSN(
     x,
@@ -83,8 +84,8 @@ def fithetSN(
     """
     # Find optimal alpha, kappa via boptim + good initialization
     result_cma = boptimSNCMA(
-        x,
-        y,
+        x=x,
+        y=y,
         N_knots=N_knots,
         Z_knots=Z_knots,
         N_deg=N_deg,
@@ -106,8 +107,8 @@ def fithetSN(
     )
     # Use result from cmaes and improve via ECM algorithm
     result_ECM = SNECM(
-        x,
-        y,
+        x=x,
+        y=y,
         initial_f=result_cma["f"],
         initial_rho=result_cma["rho"],
         initial_lambda_hat=result_cma["lambda_hat"],
@@ -155,6 +156,7 @@ def skewd(
     ecm_max_iter=5000,
     ecm_max_iter_rho=100,
     ecm_track_history=False,
+    use_KDE=False
 ):
     """Run Skewness-Robust Causal Inference.
 
@@ -195,6 +197,8 @@ def skewd(
       optimizing rho (integer, default=100)
     - ecm_track_history: whether to track parameter updates in ECM
       (boolean, default=False)
+    - use_KDE: whether to use KDE (Gaussian kernel) or Gaussian assumption 
+      for marginals in the likelihood computation (boolean, default=False)
 
     Returns
     -------
@@ -303,6 +307,22 @@ def skewd(
         )
     )
     lik_score = loglikFW - loglikRV
+    if use_KDE:
+        def estimate_KDE(x, n_cv_splits=5, kernel='gaussian', tune_bandwidths=None):
+            """Estimate log-density of x via KDE."""
+            if tune_bandwidths is None:
+                tune_bandwidths = np.logspace(-2, 1, 50)
+            # Tune bandwidth:
+            cv = KFold(n_splits=n_cv_splits, shuffle=True, random_state=910)
+            grid = GridSearchCV(KernelDensity(kernel=kernel),
+                                {'bandwidth': tune_bandwidths},
+                                cv=cv)
+            grid.fit(x)
+            kde = grid.best_estimator_
+            log_dens = kde.score_samples(x)
+            return np.sum(log_dens)
+        marginal_diff = estimate_KDE(x) - estimate_KDE(y)
+        lik_score += marginal_diff
     lik_dir = np.where(lik_score > 0, 1, 0)
     # return likdir, likscore, indepdir, indepscore,
     # resultFW, resultRV, res_FW_cma, res_RV_cma

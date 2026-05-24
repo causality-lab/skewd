@@ -9,14 +9,19 @@ In the following, we provide the general project structure.
 ```bash
 skewd/
 ├── data # benchmark datasets
-├── environment.yaml # .yaml for environment generation
 ├── example_plots # exemplary plots of skew-noise pairs
 ├── experiments # skewd experimental code: scripts and results for all benchmarks
-├── plot_examples.ipynb # generates figures in example_plots
-├── requirements.txt # requirements file
 ├── skewDGP 
 │   └── generate_skewed_LSNMs.R # generates skew-LSNM benchmarks
-└── src # source code for skewd
+├── src # source code for skewd
+├── environment.yaml # .yaml for environment generation
+├── full_kde_dict.pkl # prevent repeated computation in KDE_analysis.ipynb
+├── KDE_analysis.ipynb # KDE evaluation
+├── MV_analysis.ipynb # multivariate evaluation
+├── MV_F1.ipynb # multivariate F1 metrics
+├── plot_examples.ipynb # generates figures in example_plots
+└── requirements.txt # requirements file 
+
 ```
 
 ## Installation Instructions

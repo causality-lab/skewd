@@ -6,7 +6,7 @@
 # using quantiles: Bivariate quantile causal discovery. In International Conference on Machine
 # Learning (pp. 9311-9323). PMLR.
 #
-# The code was adapted to include skew-normal and generalized normal errors (AGN / GNO).
+# The code was adapted to include skew-normal and generalized normal errors.
 # (R version 4.4.2 was used to generate the datasets)
 
 library(MASS)
@@ -131,6 +131,99 @@ AGN_med = 0.15
 
 SN_str = 20
 SN_med = -2
+
+n = 1000
+n_pairs = 100
+set.seed(752)
+
+# 1) SN:
+# ANs with "mediocre" skewness
+ANs_SN_med = function(n) {
+  sample_ANs(n, skewness_param = SN_med, Ey_type = 3)
+}
+# LSs with "mediocre" skewness
+LSs_SN_med = function(n) {
+  sample_LSs(n, skewness_param = SN_med, Ey_type = 3)
+}
+# ANs with "strong" skewness
+ANs_SN_strong = function(n) {
+  sample_ANs(n, skewness_param = SN_str, Ey_type = 3)
+}
+# LSs with "strong" skewness
+LSs_SN_strong = function(n) {
+  sample_LSs(n, skewness_param = SN_str, Ey_type = 3)
+}
+
+# 2) AGN:
+# ANs with "mediocre" skewness
+ANs_AGN_med = function(n) {
+  sample_ANs(n, skewness_param = AGN_med, Ey_type = 2)
+}
+# LSs with "mediocre" skewness
+LSs_AGN_med = function(n) {
+  sample_LSs(n, skewness_param = AGN_med, Ey_type = 2)
+}
+# ANs with "strong" skewness
+ANs_AGN_strong = function(n) {
+  sample_ANs(n, skewness_param = AGN_str, Ey_type = 2)
+}
+# LSs with "strong" skewness
+LSs_AGN_strong = function(n) {
+  sample_LSs(n, skewness_param = AGN_str, Ey_type = 2)
+}
+# ANs with "extreme" skewness
+ANs_AGN_extreme = function(n) {
+  sample_ANs(n, skewness_param = AGN_ex, Ey_type = 2)
+}
+# LSs with "extreme" skewness
+LSs_AGN_extreme = function(n) {
+  sample_LSs(n, skewness_param = AGN_ex, Ey_type = 2)
+}
+
+data_generator <- function(model, n_size, n_pairs, prefix=""){
+  path_to_store <- paste0("../data/skew/", prefix, model, "/")
+  if (!dir.exists(paste0("../data/skew/", prefix, model))) {
+    dir.create(paste0("../data/skew/", prefix, model), recursive=T)
+  } else {
+    message("Directory already exists.")
+  }
+  if (file.exists(paste0(path_to_store,"pairs_gt.txt"))) {
+    file.remove(paste0(path_to_store,"pairs_gt.txt"))
+    message("Pairs_gt will be overwritten")
+  }
+  func_generator <- switch(model,
+                           "ANs_AGN_med" = ANs_AGN_med,
+                           "ANs_SN_med" = ANs_SN_med,
+                           "ANs_AGN_strong" = ANs_AGN_strong,
+                           "ANs_SN_strong" = ANs_SN_strong,
+                           "ANs_AGN_extreme" = ANs_AGN_extreme,
+                           "LSs_AGN_med" = LSs_AGN_med,
+                           "LSs_SN_med" = LSs_SN_med,
+                           "LSs_AGN_strong" = LSs_AGN_strong,
+                           "LSs_SN_strong" = LSs_SN_strong,
+                           "LSs_AGN_extreme" = LSs_AGN_extreme
+  )
+  for(i in 1:n_pairs){
+    pair <- func_generator(n_size)
+    coin <- runif(1, 0, 1)
+    if(coin < 0.5) {
+      pair_out <-  data.frame("x_child" = pair[,2], "x_pa" = pair[,1], "noisetmp"=pair[,3])
+    } else{
+      pair_out <- data.frame("x_pa" = pair[,1], "x_child" = pair[,2], "noisetmp"=pair[,3])
+    }
+    pair_gt <- ifelse(coin > 0.5, 1, 0)
+    write.table(pair_out,  paste0(path_to_store,"pair_",i,".txt"),
+                sep = ",", col.names = NA,  qmethod = "double")
+
+    write(as.matrix(pair_gt), paste0(path_to_store,"pairs_gt.txt"), append = T)
+  }
+}
+# generate pairs for all benchmarks
+models_to_generate <- list("ANs_AGN_med","ANs_SN_med","ANs_AGN_strong",
+                           "ANs_SN_strong","ANs_AGN_extreme",
+                           "LSs_AGN_med","LSs_SN_med","LSs_AGN_strong",
+                           "LSs_SN_strong","LSs_AGN_extreme")
+lapply(models_to_generate, function (m) data_generator(m, n, n_pairs))
 
 
 # pure noise case, i.e. the noise corresponds exactly to SN/AGN

@@ -2,7 +2,7 @@
 
 import numpy as np
 from src.utils import skewCoeff1D
-from src.snlik import sn_lik, sn_nloglikP
+from src.snlik import sn_lik, sn_nloglikP, sn_nloglikP_MV
 from cmaes import CMA
 import statsmodels.api as sm
 from sklearn.preprocessing import SplineTransformer
@@ -148,7 +148,7 @@ def optimSNCMA(
             break
         nlogliks.append(best_fitness)
         if i > cma_n_crit:
-            if abs(nlogliks[i] - nlogliks[i - 200]) < cma_crit:
+            if abs(nlogliks[i] - nlogliks[i - cma_n_crit]) < cma_crit:
                 break
     return {
         "f": optimal_params[: N.shape[1]].reshape(-1, 1),
@@ -166,6 +166,164 @@ def optimSNCMA(
         "alpha": alpha,
         "kappa": kappa,
     }
+
+
+def MVoptimSNCMA(
+    alpha_list,
+    kappa_list,
+    x,
+    y,
+    N,
+    Z,
+    K_list,
+    M_list,
+    cma_sigma=1,
+    cma_lr_adapt=True,
+    cma_population_size=100,
+    cma_iter=5000,
+    cma_crit=10**-6,
+    cma_n_crit=200,
+    bounds_rho=None,
+    bounds_lambda=None,
+    random_state=50,
+    inits=None,
+):
+    """Optimize pen. log-lik. of multivariate het. skew-normal model via cmaes.
+
+    Parameters
+    ----------
+    - alpha_list: penalty coefficient(s) for f (list of scalars)
+    - kappa_list: penalty coefficient(s) for rho (list of scalars)
+    - x: covariate(s) (n x d, d=1 bivariate)
+    - y: outcome (n x 1)
+    - N: design matrix for f (n x p_f)
+    - Z: design matrix for rho (n x p_rho)
+    - K_list: list of penalty matrices for f, one per covariate (p_f x p_f)
+    - M_list: list of penalty matrices for rho, one per covariate (p_rho x p_rho)
+    - cma_sigma: sigma in CMA (positive scalar, default=1)
+    - cma_lr_adapt: adaptive learning rate in CMA (boolean, default=True)
+    - cma_population_size: CMA population size (integer, default=100)
+    - cma_iter: number of CMA iterations (integer, default=5000)
+    - cma_crit: likelihood stopping crit in CMA (pos. scalar, default=10**-6)
+    - cma_n_crit: minimum number of iterations in CMA (integer, default=200)
+    - bounds_rho: bounds for rho parameter (NumPy array of shape (p_rho, 2))
+    - bounds_lambda: bounds for lambda parameter (NumPy array of shape (1, 2))
+    - random_state: determines RNG (integer)
+    - inits: optional initial parameter vector (flattened + concatenated)
+
+
+    Returns
+    -------
+    - dictionary with estimated and fixed model parameters and
+      optimization statistics
+    """
+    if bounds_rho is None:
+        bounds_rho = np.array([[-10, 5]] * Z.shape[1])
+
+    if bounds_lambda is None:
+        bounds_lambda = np.array([[-25, 25]])
+
+    if inits is None:
+        initial_f = sm.OLS(y, N).fit().params.reshape(-1, 1)
+        initial_rho = np.zeros(Z.shape[1]).reshape(-1, 1)
+        initial_lambda_hat = skewCoeff1D(y)
+        initial_params = np.concatenate(
+            [
+                initial_f.flatten(),
+                initial_rho.flatten(),
+                initial_lambda_hat.flatten(),
+            ]
+        )
+    else:
+        initial_params = inits
+
+    optimal_params = initial_params
+    best_fitness = sn_nloglikP_MV(
+        y=y,
+        N=N,
+        Z=Z,
+        K_list=K_list,
+        alpha_list=alpha_list,
+        M_list=M_list,
+        kappa_list=kappa_list,
+        params=optimal_params,
+    )
+    bounds = np.array([[-np.inf, np.inf]] * len(optimal_params))
+    bounds[-1] = bounds_lambda
+    for k in range(Z.shape[1]):  # Set bounds for rho
+        idx = k + N.shape[1]
+        bounds[idx] = bounds_rho[k]
+        
+    # make sure that the initial lambda value is inside the bounds:
+    optimal_params[-1] = np.clip(optimal_params[-1], bounds_lambda[0, 0], bounds_lambda[0, 1]) 
+
+    optimizer = CMA(
+        mean=optimal_params,
+        sigma=cma_sigma,
+        lr_adapt=cma_lr_adapt,
+        population_size=cma_population_size,
+        bounds=bounds,
+        seed=random_state,
+    )    
+    count = 0
+    nlogliks = [
+        sn_nloglikP_MV(
+            params=optimal_params,
+            y=y,
+            N=N,
+            Z=Z,
+            K_list=K_list,
+            alpha_list=alpha_list,
+            M_list=M_list,
+            kappa_list=kappa_list,
+        )
+    ]
+    for i in range(cma_iter):
+        count = count + 1
+        try:
+            solutions = []
+            for _ in range(optimizer.population_size):
+                child = optimizer.ask()
+                value = sn_nloglikP_MV(
+                    params=child,
+                    y=y,
+                    N=N,
+                    Z=Z,
+                    K_list=K_list,
+                    alpha_list=alpha_list,
+                    M_list=M_list,
+                    kappa_list=kappa_list,
+                )
+                solutions.append((child, value))
+                if value >= 0 and value < best_fitness:
+                    best_fitness = value
+                    optimal_params = child
+            optimizer.tell(solutions)
+            if optimizer.should_stop():
+                break
+        except Exception:
+            break
+        nlogliks.append(best_fitness)
+        if i > cma_n_crit:
+            if abs(nlogliks[i] - nlogliks[i - cma_n_crit]) < cma_crit:
+                break
+    return {
+        "f": optimal_params[: N.shape[1]].reshape(-1, 1),
+        "rho": optimal_params[N.shape[1] : -1].reshape(-1, 1),
+        "lambda_hat": optimal_params[-1],
+        "x": x,
+        "y": y,
+        "N": N,
+        "Z": Z,
+        "K_list": K_list,
+        "M_list": M_list,
+        "nlogliks": nlogliks,
+        "finalNLL": best_fitness,
+        "n_iter": count,
+        "alpha_list": alpha_list,
+        "kappa_list": kappa_list,
+    }
+
 
 
 def boptimSNCMA(
@@ -189,17 +347,22 @@ def boptimSNCMA(
     log_bounds_kappa=None,
     n_cv_splits_boptim=5,
     random_state=54,
+    multivariate=False
 ):
     """Find optimal alpha, kappa + model via CMA Bayesian Optimization.
 
     Parameters
     ----------
-    - x: covariate (n x 1)
     - y: outcome (n x 1)
-    - N_knots: number of knots for spline matrix N (scalar, default=12)
-    - Z_knots: number of knots for spline matrix Z (scalar, default=5)
-    - N_deg: degree for spline matrix N (scalar, default=3)
-    - Z_deg: degree for spline matrix N (scalar, default=3)
+    - x: covariate(s) (n x d, d=1 bivariate, default=None)
+    - N_knots: number of knots for spline matrix N (scalar, default=12),
+               if multivariate==True: number of knots per covariate spline
+    - Z_knots: number of knots for spline matrix Z (scalar, default=5),
+               if multivariate==True: number of knots per covariate spline
+    - N_deg: degree for spline matrix N (scalar, default=3),
+               if multivariate==True: degree for each covariate spline
+    - Z_deg: degree for spline matrix N (scalar, default=3),
+               if multivariate==True: degree for each covariate spline
     - cma_sigma: sigma in CMA (positive scalar, default=1)
     - cma_lr_adapt: adaptive learning rate in CMA (boolean, default=True)
     - cma_population_size: CMA population size (integer, default=100)
@@ -214,6 +377,7 @@ def boptimSNCMA(
     - log_bounds_kappa: list [lower bound, upper bound] for alpha
     - n_cv_splits: number of CV splits in Bayesian Optimization (default=5)
     - random_state: determines RNG (integer)
+    - multivariate: flag for multivariate version (default=False)
 
     Returns
     -------
@@ -221,7 +385,11 @@ def boptimSNCMA(
       optimization statistics
     """
     if bounds_rho is None:
-        n_col_Z = Z_knots + Z_deg - 1
+        if multivariate:
+            d = x.shape[1]
+            n_col_Z = (Z_knots + Z_deg - 1) * d
+        else:
+            n_col_Z = Z_knots + Z_deg - 1
         bounds_rho = np.array([[-10, 5]] * n_col_Z)
     if log_bounds_alpha is None:
         log_bounds_alpha = [-4, 4]
@@ -248,78 +416,169 @@ def boptimSNCMA(
         D2 = np.diff(D2, n=2, axis=0)
         M = D2.T @ D2
         return N, Z, K, M
+    
+    if multivariate:
+        d = x.shape[1]
+        N_list, Z_list, K_list, M_list = [], [], [], []
+        for j in range(d):
+            Nj, Zj, Kj, Mj = build_NZKM(x[:,j], N_knots, Z_knots, N_deg, Z_deg)
+            N_list.append(Nj)
+            Z_list.append(Zj)
+            K_list.append(Kj)
+            M_list.append(Mj)
+        N = np.hstack(N_list) 
+        Z = np.hstack(Z_list) 
+        # D = np.eye(N.shape[1])
+        # D = np.diff(D, n=2, axis=0)
+        # K = D.T @ D
+        # D2 = np.eye(Z.shape[1])
+        # D2 = np.diff(D2, n=2, axis=0)
+        # M = D2.T @ D2
+    else:
+        N, Z, K, M = build_NZKM(x, N_knots, Z_knots, N_deg, Z_deg)
 
-    N, Z, K, M = build_NZKM(x, N_knots, Z_knots, N_deg, Z_deg)
     saved_cv_results = {}
 
-    def cv_objective(logvalues):
-        # Calculate CV neg. log-likelihood given log_alpha, log_kappa.
-        log_alpha, log_kappa = logvalues
-        alpha = np.exp(log_alpha)
-        kappa = np.exp(log_kappa)
-        nlls = []
-        kf = KFold(
-            n_splits=n_cv_splits_boptim,
-            shuffle=True,
-            random_state=rng.integers(0, 2**32 - 1),
-        )
-        saved_cv_results[(alpha, kappa)] = []
-        for train_idx, val_idx in kf.split(x):
-            # Split data
-            x_train, _ = x[train_idx], x[val_idx]
-            y_train, y_val = y[train_idx], y[val_idx]
-            # Build basis matrices
-            N_train = N[train_idx, :]
-            Z_train = Z[train_idx, :]
-            N_val = N[val_idx, :]
-            Z_val = Z[val_idx, :]
-            # Fit model using training fold
-            result = optimSNCMA(
-                alpha,
-                kappa,
-                x_train,
-                y_train,
-                N_train,
-                Z_train,
-                K,
-                M,
-                cma_sigma=cma_sigma,
-                cma_lr_adapt=cma_lr_adapt,
-                cma_population_size=cma_population_size,
-                cma_iter=cma_iter,
-                cma_crit=cma_crit,
-                cma_n_crit=cma_n_crit,
-                bounds_rho=bounds_rho,
-                bounds_lambda=bounds_lambda,
+    if multivariate:
+        def cv_objective(logvalues):
+            # Calculate CV neg. log-likelihood given log_alpha, log_kappa.
+            log_alpha_list = logvalues[0:d]
+            log_kappa_list = logvalues[d:]
+            alpha_list = [np.exp(log_alpha) for log_alpha in log_alpha_list]
+            kappa_list = [np.exp(log_kappa) for log_kappa in log_kappa_list]
+            nlls = []
+            kf = KFold(
+                n_splits=n_cv_splits_boptim,
+                shuffle=True,
                 random_state=rng.integers(0, 2**32 - 1),
-                inits=None,
             )
-            saved_cv_results[(alpha, kappa)].append(result)
-            # Get estimated parameters
-            f_hat = result["f"]
-            rho_hat = result["rho"]
-            lambda_hat = result["lambda_hat"]
-            # Compute log-likelihood on validation set
-            loglik_val = np.sum(
-                np.log(
-                    sn_lik(
-                        y=y_val,
-                        N=N_val,
-                        Z=Z_val,
-                        f=f_hat,
-                        rho=rho_hat,
-                        lambda_hat=lambda_hat,
+            tpl = tuple(alpha_list + kappa_list)
+            saved_cv_results[tpl] = []
+            for train_idx, val_idx in kf.split(y):
+                # Split data
+                x_train, _ = x[train_idx,:], x[val_idx,:]
+                y_train, y_val = y[train_idx], y[val_idx]
+                # Build basis matrices
+                N_train = N[train_idx, :]
+                Z_train = Z[train_idx, :]
+                N_val = N[val_idx, :]
+                Z_val = Z[val_idx, :]
+                # Fit model using training fold
+                result = MVoptimSNCMA(
+                    alpha_list,
+                    kappa_list,
+                    x_train,
+                    y_train,
+                    N_train,
+                    Z_train,
+                    K_list,
+                    M_list,
+                    cma_sigma=cma_sigma,
+                    cma_lr_adapt=cma_lr_adapt,
+                    cma_population_size=cma_population_size,
+                    cma_iter=cma_iter,
+                    cma_crit=cma_crit,
+                    cma_n_crit=cma_n_crit,
+                    bounds_rho=bounds_rho,
+                    bounds_lambda=bounds_lambda,
+                    random_state=rng.integers(0, 2**32 - 1),
+                    inits=None,
+                )
+                saved_cv_results[tpl].append(result)
+                # Get estimated parameters
+                f_hat = result["f"]
+                rho_hat = result["rho"]
+                lambda_hat = result["lambda_hat"]
+                # Compute log-likelihood on validation set
+                loglik_val = np.sum(
+                    np.log(
+                        sn_lik(
+                            y=y_val,
+                            N=N_val,
+                            Z=Z_val,
+                            f=f_hat,
+                            rho=rho_hat,
+                            lambda_hat=lambda_hat,
+                        )
                     )
                 )
-            )
-            nlls.append(-loglik_val)
-        return np.mean(nlls)
+                nlls.append(-loglik_val)
+            return np.mean(nlls)
 
-    # Search space for the parameters on log scale
-    space = [
-        Real(log_bounds_alpha[0], log_bounds_alpha[1], name="log_alpha"),
-        Real(log_bounds_kappa[0], log_bounds_kappa[1], name="log_kappa"),
-    ]
+        # Search space for the parameters on log scale, d many per penalty parameter
+        space = [Real(log_bounds_alpha[0], log_bounds_alpha[1], name=f"log_alpha{j+1}")
+                for j in range(d)] + [
+                Real(log_bounds_kappa[0], log_bounds_kappa[1], name=f"log_kappa{j+1}")
+                for j in range(d)]
+    else: 
+        def cv_objective(logvalues):
+            # Calculate CV neg. log-likelihood given log_alpha, log_kappa.
+            log_alpha, log_kappa = logvalues
+            alpha = np.exp(log_alpha)
+            kappa = np.exp(log_kappa)
+            nlls = []
+            kf = KFold(
+                n_splits=n_cv_splits_boptim,
+                shuffle=True,
+                random_state=rng.integers(0, 2**32 - 1),
+            )
+            saved_cv_results[(alpha, kappa)] = []
+            for train_idx, val_idx in kf.split(y):
+                # Split data
+                x_train, _ = x[train_idx,:], x[val_idx,:]
+                y_train, y_val = y[train_idx], y[val_idx]
+                # Build basis matrices
+                N_train = N[train_idx, :]
+                Z_train = Z[train_idx, :]
+                N_val = N[val_idx, :]
+                Z_val = Z[val_idx, :]
+                # Fit model using training fold
+                result = optimSNCMA(
+                    alpha,
+                    kappa,
+                    x_train,
+                    y_train,
+                    N_train,
+                    Z_train,
+                    K,
+                    M,
+                    cma_sigma=cma_sigma,
+                    cma_lr_adapt=cma_lr_adapt,
+                    cma_population_size=cma_population_size,
+                    cma_iter=cma_iter,
+                    cma_crit=cma_crit,
+                    cma_n_crit=cma_n_crit,
+                    bounds_rho=bounds_rho,
+                    bounds_lambda=bounds_lambda,
+                    random_state=rng.integers(0, 2**32 - 1),
+                    inits=None,
+                )
+                saved_cv_results[(alpha, kappa)].append(result)
+                # Get estimated parameters
+                f_hat = result["f"]
+                rho_hat = result["rho"]
+                lambda_hat = result["lambda_hat"]
+                # Compute log-likelihood on validation set
+                loglik_val = np.sum(
+                    np.log(
+                        sn_lik(
+                            y=y_val,
+                            N=N_val,
+                            Z=Z_val,
+                            f=f_hat,
+                            rho=rho_hat,
+                            lambda_hat=lambda_hat,
+                        )
+                    )
+                )
+                nlls.append(-loglik_val)
+            return np.mean(nlls)
+
+        # Search space for the parameters on log scale
+        space = [
+            Real(log_bounds_alpha[0], log_bounds_alpha[1], name="log_alpha"),
+            Real(log_bounds_kappa[0], log_bounds_kappa[1], name="log_kappa"),
+        ]
     bo_result = gp_minimize(
         func=cv_objective,
         dimensions=space,
@@ -329,9 +588,17 @@ def boptimSNCMA(
         acq_func="EI",
         initial_point_generator="lhs",
     )
-    log_alpha_opt, log_kappa_opt = bo_result.x
-    alpha_opt = np.exp(log_alpha_opt)
-    kappa_opt = np.exp(log_kappa_opt)
+    if multivariate:
+        log_alpha_opt_list = bo_result.x[0:d]
+        log_kappa_opt_list = bo_result.x[d:]
+        alpha_opt_list = [np.exp(log_alpha) for log_alpha in log_alpha_opt_list]
+        kappa_opt_list = [np.exp(log_kappa) for log_kappa in log_kappa_opt_list]
+        tpl_opt = tuple(np.exp(b) for b in bo_result.x)
+    else:
+        log_alpha_opt, log_kappa_opt = bo_result.x
+        alpha_opt = np.exp(log_alpha_opt)
+        kappa_opt = np.exp(log_kappa_opt)
+        
 
     def paramconcat(results):
         return np.concatenate(
@@ -343,32 +610,60 @@ def boptimSNCMA(
         )
 
     inits = [None]
-    for scr in saved_cv_results[(alpha_opt, kappa_opt)]:
-        inits.append(paramconcat(scr))
 
-    results = []
-    for i in inits:
-        res = optimSNCMA(
-            alpha_opt,
-            kappa_opt,
-            x,
-            y,
-            N,
-            Z,
-            K,
-            M,
-            cma_sigma=cma_sigma,
-            cma_lr_adapt=cma_lr_adapt,
-            cma_population_size=cma_population_size,
-            cma_iter=cma_iter,
-            cma_crit=cma_crit,
-            cma_n_crit=cma_n_crit,
-            bounds_rho=bounds_rho,
-            random_state=rng.integers(0, 2**32 - 1),
-            inits=i,
-            bounds_lambda=bounds_lambda,
-        )
-        results.append(res)
+    if multivariate:
+        for scr in saved_cv_results[tpl_opt]:
+            inits.append(paramconcat(scr))
+        results = []
+        for i in inits:
+            res = MVoptimSNCMA(
+                alpha_list=alpha_opt_list,
+                kappa_list=kappa_opt_list,
+                x=x,
+                y=y,
+                N=N,
+                Z=Z,
+                K_list=K_list,
+                M_list=M_list,
+                cma_sigma=cma_sigma,
+                cma_lr_adapt=cma_lr_adapt,
+                cma_population_size=cma_population_size,
+                cma_iter=cma_iter,
+                cma_crit=cma_crit,
+                cma_n_crit=cma_n_crit,
+                bounds_rho=bounds_rho,
+                random_state=rng.integers(0, 2**32 - 1),
+                inits=i,
+                bounds_lambda=bounds_lambda,
+            )
+            results.append(res)
+    else:
+        for scr in saved_cv_results[(alpha_opt, kappa_opt)]:
+            inits.append(paramconcat(scr))
+
+        results = []
+        for i in inits:
+            res = optimSNCMA(
+                alpha=alpha_opt,
+                kappa=kappa_opt,
+                x=x,
+                y=y,
+                N=N,
+                Z=Z,
+                K=K,
+                M=M,
+                cma_sigma=cma_sigma,
+                cma_lr_adapt=cma_lr_adapt,
+                cma_population_size=cma_population_size,
+                cma_iter=cma_iter,
+                cma_crit=cma_crit,
+                cma_n_crit=cma_n_crit,
+                bounds_rho=bounds_rho,
+                random_state=rng.integers(0, 2**32 - 1),
+                inits=i,
+                bounds_lambda=bounds_lambda,
+            )
+            results.append(res)
 
     best_result = min(results, key=lambda d: d["finalNLL"])
     return best_result

@@ -1,6 +1,6 @@
-"""Exemplary usage of skewci."""
+"""Exemplary usage of skewd."""
 
-from src.skewci import skewci
+from src.skewd import skewd
 from src.datasets import skewANsLSs
 from sklearn.preprocessing import StandardScaler
 
@@ -21,7 +21,7 @@ x, y = dataset.cause.flatten().numpy().reshape(
 ), dataset.effect.flatten().numpy().reshape((-1, 1))
 
 
-indep_score, indep_dir, lik_score, lik_dir, res_FW, res_RV, _, _ = skewci(
+indep_score, indep_dir, lik_score, lik_dir, res_FW, res_RV, _, _ = skewd(
     x, y, cma_iter=500, n_cv_splits_boptim=8, ecm_max_iter=200, ecm_max_iter_rho=50
 )
 

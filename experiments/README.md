@@ -4,15 +4,18 @@
 
 ```bash
 skewd/experiments/
+├── baseline_results # contains baseline results in .csv format 
+├── results # contains results in .csv format and .pkl for every single experiment
 ├── ANLSMN_experiments.py # used to run corresponding experiments
 ├── Benchmark_simulated_experiments.py # used to run corresponding experiments
 ├── Dataverse_pairs_experiments.py # used to run corresponding experiments
-├── Tuebingen_experiments.py # used to run corresponding experiments
-├── baseline_results # contains baseline results in .csv format 
 ├── evaluation.ipynb # run to compute and save result metrics
 ├── evaluation_cmaes.ipynb # run to compute and save result metrics for cmaes
-├── results # contains results in .csv format and .pkl for every single experiment
-└── skew_experiments.py # used to run corresponding experiments
+├── MVskew6_experiments.py # used to run corresponding experiments
+├── MVskew10_experiments.py # used to run corresponding experiments
+├── skew_experiments.py # used to run corresponding experiments
+└── Tuebingen_experiments.py # used to run corresponding experiments
+
 ```
 
 ## Run the Experiments
@@ -62,5 +65,15 @@ python -m experiments.Tuebingen_experiments
 ```
 For Tuebingen, consider the IDs 1,2,...,108, except 47, 52, 53, 54, 55, 70, 71, 105, 107.
 
+### Multivariate 
+To run SKEWD on the first pair of the MVskew6 datasets, run the following code on the terminal.
+```terminal
+set PBS_ARRAYID=1
+python -m experiments.MVskew6_experiments
+```
+For all pairs, consider the IDs 1,2,...,100 and IDs 101,102,...,200 for oracle MEC runs.
+Analogously for MVskew10.
+
 ## Evaluation
-Evaluation was carried out using the evaluation.ipynb and the evaluation_cmaes.ipynb.
+Evaluation was carried out using the evaluation.ipynb and the evaluation_cmaes.ipynb and 
+the .ipynb files in the root directory.

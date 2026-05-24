@@ -14,3 +14,9 @@ cmaes
 scikit-optimize
 pytest
 torch
+igraph
+cdt
+causal-learn
+graphical_models
+graphviz
+rpy2
