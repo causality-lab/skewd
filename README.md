@@ -1,6 +1,8 @@
+[![Venue](https://img.shields.io/badge/venue-ICML_2026-darkblue)](https://openreview.net/forum?id=mXn4ueFKnQ)
+
 # SKEWD
 
-Code for [Skewness-Robust Causal Discovery in Location-Scale Noise Models]()
+Code for [Skewness-Robust Causal Discovery in Location-Scale Noise Models](https://www.a-marx.com/publications/56060-skewness-robust-causal-discovery-in-location-scale-noise-models)
 
 ## Project Structure
 
@@ -68,3 +70,15 @@ print(f"SKEWD-LL infers direction {lik_dir}")
 The inferred direction is given by indep_dir and lik_dir for independence testing and likelihood scoring, respectively. 
 If the direction is 1 x -> y is inferred, while if it is 0 y-> x is inferred. 
 Another example for a single pair is provided in "src/example.py", showing how to execute SKEWD on a skew-noise pair.
+
+## Citation
+```
+@inproceedings{klippert:26:skewness-robust,
+    anonymous2026skewnessrobust,
+    title={Skewness-Robust Causal Discovery in Location-Scale Noise Models},
+    author={Anonymous},
+    booktitle={Forty-third International Conference on Machine Learning},
+    year={2026},
+    url={https://openreview.net/forum?id=mXn4ueFKnQ}
+}
+```
