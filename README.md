@@ -74,7 +74,6 @@ Another example for a single pair is provided in "src/example.py", showing how t
 ## Citation
 ```
 @inproceedings{klippert:26:skewness-robust,
-    anonymous2026skewnessrobust,
     title={Skewness-Robust Causal Discovery in Location-Scale Noise Models},
     author={Anonymous},
     booktitle={Forty-third International Conference on Machine Learning},
