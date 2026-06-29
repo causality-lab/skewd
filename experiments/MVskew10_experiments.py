@@ -7,8 +7,8 @@ from pathlib import Path
 import os
 import time
 
-#rep_id = int(os.getenv("PBS_ARRAYID", "unknown")) # global: 1-200 on SLURM
-rep_id = 139
+rep_id = int(os.getenv("PBS_ARRAYID", "unknown")) # global: 1-200 on SLURM
+#rep_id = 139
 
 if __name__ == "__main__":
     start = time.time()
