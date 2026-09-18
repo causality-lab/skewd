@@ -2,7 +2,7 @@
 
 # SKEWD
 
-Code for [Skewness-Robust Causal Discovery in Location-Scale Noise Models](https://www.a-marx.com/publications/56060-skewness-robust-causal-discovery-in-location-scale-noise-models)
+Code for [Skewness-Robust Causal Discovery in Location-Scale Noise Models](https://openreview.net/forum?id=mXn4ueFKnQ)
 
 ## Project Structure
 
